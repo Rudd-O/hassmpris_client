@@ -47,8 +47,10 @@ class CAKESRequestor(object):
         unused_peer: str,
         complete: blindecdh.CompletedECDH,
     ) -> bool:
+        print("A notification has appeared on the remote computer.")
+        print("Please use it to verify that the key matches this computer's.")
         print(
-            "Key appears to be %s"
+            "The key on this side appears to be %s"
             % shortauthstrings.emoji(
                 complete.derived_key,
                 6,
