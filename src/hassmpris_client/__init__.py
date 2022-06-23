@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import (  # noqa: E402,E501
 )
 
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 
 _LOGGER = logging.getLogger(__name__)
 
