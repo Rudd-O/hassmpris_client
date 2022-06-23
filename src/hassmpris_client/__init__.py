@@ -1,3 +1,4 @@
+import errno
 import logging
 import os
 import sys
@@ -196,7 +197,12 @@ def client(server: str) -> None:
             config.folder()
         )
         requestor = CAKESRequestor(cakes_address, client_csr)
-        client_cert, trust_chain = requestor.run()
+        try:
+            client_cert, trust_chain = requestor.run()
+        except cakes.Rejected as e:
+            print("The remote side did not authorize us: %s" % e)
+            sys.exit(errno.EACCES)
+
         certs.save_client_certs_and_trust_chain(
             config.folder(),
             client_cert,
