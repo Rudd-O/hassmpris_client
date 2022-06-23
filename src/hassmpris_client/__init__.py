@@ -5,22 +5,30 @@ import threading
 
 from typing import List, Tuple, cast
 
-import cakes
-import blindecdh
-import shortauthstrings
+# FIXME: the next line should be fixed when Fedora has
+# protoc 3.19.0 or later, and the protobufs need to be recompiled
+# when that happens.  Not just the hassmpris protos, also the
+# cakes ones.
+os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
-import grpc
-from hassmpris.proto import mpris_pb2_grpc, mpris_pb2
-import hassmpris.certs as certs
-from hassmpris.certs import PEM
+import cakes  # noqa: E402
+import blindecdh  # noqa: E402
+import shortauthstrings  # noqa: E402
 
-from hassmpris import config
+import grpc  # noqa: E402
+from hassmpris.proto import mpris_pb2_grpc, mpris_pb2  # noqa: E402
+import hassmpris.certs as certs  # noqa: E402
+from hassmpris.certs import PEM  # noqa: E402
 
-from cryptography.x509 import CertificateSigningRequest, Certificate
-from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
+from hassmpris import config  # noqa: E402
+
+from cryptography.x509 import CertificateSigningRequest, Certificate  # noqa: E402,E501
+from cryptography.hazmat.primitives.asymmetric.rsa import (  # noqa: E402,E501
+    RSAPrivateKey,
+)
 
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 _LOGGER = logging.getLogger(__name__)
 

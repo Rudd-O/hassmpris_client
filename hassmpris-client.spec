@@ -8,7 +8,7 @@
 %define mybuildnumber %{?build_number}%{?!build_number:1}
 
 Name:           python-%{_name}
-Version:        0.0.1
+Version:        0.0.2
 Release:        %{mybuildnumber}%{?dist}
 Summary:        Simple command-line client to control the MPRIS multimedia agent
 
