@@ -127,7 +127,18 @@ class MPRISClient(object):
                 raise
 
     def repl(self, stub: mpris_pb2_grpc.MPRISStub) -> None:
+        print(
+            "When you open an MPRIS-compatible player, you will see its name scroll onscreen."  # noqa: E501
+        )
+        print("Commands:")
+        print("* play [optionally player name]  -- plays media on the player")
+        print("* pause [optionally player name] -- pauses media on the player")
+        print("* stop [optionally player name]  -- stops media on the player")
+        print("* empty line                     -- exits the client")
+        print()
         while True:
+            sys.stdout.write("> ")
+            sys.stdout.flush()
             s = sys.stdin.readline().strip()
             if not s:
                 return
