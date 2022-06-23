@@ -29,7 +29,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import (  # noqa: E402,E501
 )
 
 
-__version__ = "0.0.3"
+__version__ = "0.0.4"
 
 _LOGGER = logging.getLogger(__name__)
 
