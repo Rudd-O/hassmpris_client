@@ -285,7 +285,7 @@ class AsyncMPRISClient(object):
             self.channel.close()
             delattr(self, "channel")
 
-    async def close(self):
+    async def close(self) -> None:
         self.__del__()
 
     @normalize_connection_errors
