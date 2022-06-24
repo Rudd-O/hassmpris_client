@@ -14,6 +14,13 @@ import asyncio
 
 from typing import List, Tuple, cast, TypeVar, Callable, Any, AsyncGenerator
 
+from cryptography.x509 import CertificateSigningRequest, Certificate
+from cryptography.hazmat.primitives.asymmetric.rsa import (
+    RSAPrivateKey,
+)
+
+import shortauthstrings  # noqa: E402
+
 # FIXME: the next line should be fixed when Fedora has
 # protoc 3.19.0 or later, and the protobufs need to be recompiled
 # when that happens.  Not just the hassmpris protos, also the
@@ -21,29 +28,27 @@ from typing import List, Tuple, cast, TypeVar, Callable, Any, AsyncGenerator
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
 from google.protobuf.empty_pb2 import Empty  # noqa: E402
-from hassmpris.proto import mpris_grpc
+from hassmpris.proto import mpris_grpc  # noqa: E402
 
 import cakes  # noqa: E402
 import blindecdh  # noqa: E402
-import shortauthstrings  # noqa: E402
 
-import grpc  # noqa: E402
 from hassmpris.proto import mpris_pb2  # noqa: E402
 import hassmpris.certs as certs  # noqa: E402
 
 from hassmpris import config  # noqa: E402
 
-from cryptography.x509 import CertificateSigningRequest, Certificate  # noqa: E402,E501
-from cryptography.hazmat.primitives.asymmetric.rsa import (  # noqa: E402,E501
-    RSAPrivateKey,
-)
 
-
-__version__ = "0.0.7"
+__version__ = "0.0.8"
 
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 15.0
+
+
+Ignored = cakes.Ignored
+Rejected = cakes.Rejected
+CannotDecrypt = cakes.CannotDecrypt
 
 
 class ClientException(Exception):
@@ -79,6 +84,16 @@ class Disconnected(ClientException):
 
     def __str__(self) -> str:
         f = "Server gone: %s"
+        return f % (self.args[0],)
+
+
+class Timeout(ClientException):
+    """
+    The connection to the server timed out.
+    """
+
+    def __str__(self) -> str:
+        f = "Server timed out: %s"
         return f % (self.args[0],)
 
 
@@ -119,7 +134,7 @@ def normalize_connection_errors(f: StubFunc) -> StubFunc:
         except OSError as e:
             raise CannotConnect(e)
         except asyncio.exceptions.TimeoutError as e:
-            raise CannotConnect(e)
+            raise Timeout(e)
 
     return cast(StubFunc, inner)
 
@@ -139,7 +154,7 @@ def normalize_connection_errors_iterable(f: StubFunc) -> StubFunc:
         except grpclib.exceptions.StreamTerminatedError as e:
             raise Disconnected(e)
         except asyncio.exceptions.TimeoutError as e:
-            raise CannotConnect(e)
+            raise Timeout(e)
 
     return cast(StubFunc, inner)
 
@@ -150,15 +165,13 @@ class AsyncCAKESClient(object):
         host: str,
         port: int,
         csr: CertificateSigningRequest,
-        verification_function: cakes.ECDHVerificationCallback,
     ):
-        self.channel = grpc.insecure_channel("%s:%d" % (host, port))
-        self.client = cakes.CAKESClient(
+        self.channel = grpclib.client.Channel(host, port)
+        self.client = cakes.AsyncCAKESClient(
             self.channel,
             csr,
-            verification_function,
-            cakes.unconditional_accept_cert,
         )
+        self.ecdh: blindecdh.CompletedECDH | None = None
 
     def __del__(self) -> None:
         delattr(self, "client")
@@ -166,21 +179,34 @@ class AsyncCAKESClient(object):
         delattr(self, "channel")
 
     @normalize_connection_errors
-    async def run(self) -> Tuple[Certificate, List[Certificate]]:
-        loop = asyncio.get_running_loop()
-        try:
-            return cast(
-                Tuple[Certificate, List[Certificate]],
-                await loop.run_in_executor(None, self.client.run),
-            )
-        except ConnectionRefusedError as e:
-            raise CannotConnect(e)
-        except OSError as e:
-            raise CannotConnect(e)
-        except grpclib.exceptions.StreamTerminatedError as e:
-            raise Disconnected(e)
-        except asyncio.exceptions.TimeoutError as e:
-            raise CannotConnect(e)
+    async def obtain_verifier(self) -> blindecdh.CompletedECDH:
+        """
+        Obtains the verifier with the derived_key attribute.
+
+        Compare this derived_key with the counterparty's derived_key.
+
+        If they do not match, DO NOT call obtain_certificate() --
+        your communication is compromised.
+
+        Refer to cakes.AsyncCAKESClient for more documentation.
+        """
+        self.ecdh = await self.client.obtain_verifier()
+        return self.ecdh
+
+    @normalize_connection_errors
+    async def obtain_certificate(
+        self,
+    ) -> Tuple[Certificate, List[Certificate]]:  # noqa:E501
+        """
+        Obtains the signed client certificate and the trust chain.
+
+        Only call when obtain_verifier()'s result has been verified
+        to match on both sides.
+
+        Refer to cakes.AsyncCAKESClient for more documentation.
+        """
+        assert self.ecdh, "did not run obtain_verifier"
+        return await self.client.obtain_certificate(self.ecdh)
 
 
 class MPRISChannel(Channel):
@@ -253,9 +279,14 @@ class AsyncMPRISClient(object):
         self.stub = mpris_grpc.MPRISStub(channel=self.channel)
 
     def __del__(self) -> None:
-        delattr(self, "stub")
-        self.channel.close()
-        delattr(self, "channel")
+        if hasattr(self, "stub"):
+            delattr(self, "stub")
+        if hasattr(self, "channel"):
+            self.channel.close()
+            delattr(self, "channel")
+
+    async def close(self):
+        self.__del__()
 
     @normalize_connection_errors
     async def ping(self) -> None:
@@ -265,7 +296,7 @@ class AsyncMPRISClient(object):
     async def stream_updates(
         self,
     ) -> AsyncGenerator[mpris_pb2.MPRISUpdateReply, None]:
-        async with self.stub.Updates.open(timeout=DEFAULT_TIMEOUT) as stream:
+        async with self.stub.Updates.open() as stream:
             await stream.send_message(mpris_pb2.MPRISUpdateRequest(), end=True)
             async for message in stream:
                 yield message
@@ -401,11 +432,21 @@ async def async_main() -> int:
             server,
             40052,
             client_csr,
-            accept_ecdh_via_console,
         )
         try:
-            client_cert, trust_chain = await cakesclient.run()
-        except cakes.Rejected as e:
+            ecdh = await cakesclient.obtain_verifier()
+        except Rejected as e:
+            print("Not authorized: %s" % e)
+            return errno.EACCES
+
+        result = accept_ecdh_via_console(server, ecdh)
+        if not result:
+            print("Locally rejected.")
+            return errno.EACCES
+
+        try:
+            client_cert, trust_chain = await cakesclient.obtain_certificate()
+        except Rejected as e:
             print("Not authorized: %s" % e)
             return errno.EACCES
 
@@ -458,7 +499,7 @@ async def async_main() -> int:
     return 0
 
 
-def main()->None:
+def main() -> None:
     sys.exit(asyncio.run(async_main()))
 
 
