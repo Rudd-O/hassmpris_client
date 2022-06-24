@@ -10,7 +10,6 @@ import grpclib.exceptions
 from grpclib.client import Channel
 from grpclib.protocol import H2Protocol
 import _ssl
-from hassmpris.proto import mpris_grpc
 import asyncio
 
 from typing import List, Tuple, cast, TypeVar, Callable, Any, AsyncGenerator
@@ -22,6 +21,7 @@ from typing import List, Tuple, cast, TypeVar, Callable, Any, AsyncGenerator
 os.environ["PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION"] = "python"
 
 from google.protobuf.empty_pb2 import Empty  # noqa: E402
+from hassmpris.proto import mpris_grpc
 
 import cakes  # noqa: E402
 import blindecdh  # noqa: E402
@@ -39,7 +39,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import (  # noqa: E402,E501
 )
 
 
-__version__ = "0.0.5"
+__version__ = "0.0.6"
 
 _LOGGER = logging.getLogger(__name__)
 
