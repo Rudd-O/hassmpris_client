@@ -6,7 +6,6 @@ import ssl
 import sys
 import tempfile
 
-# FIXME add dep of grpclib
 import grpclib.exceptions
 from grpclib.client import Channel
 from grpclib.protocol import H2Protocol
