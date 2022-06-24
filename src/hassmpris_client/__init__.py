@@ -39,7 +39,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import (  # noqa: E402,E501
 )
 
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -376,7 +376,7 @@ If ping is not specified, you get a rudimentary remote control.
     return usage_str
 
 
-async def main() -> int:
+async def async_main() -> int:
     if not sys.argv[1:]:
         print(usage())
         return os.EX_USAGE
@@ -458,5 +458,9 @@ async def main() -> int:
     return 0
 
 
+def main()->None:
+    sys.exit(asyncio.run(async_main()))
+
+
 if __name__ == "__main__":
-    sys.exit(asyncio.run(main()))
+    main()
