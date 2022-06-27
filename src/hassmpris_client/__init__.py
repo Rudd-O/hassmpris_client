@@ -39,7 +39,7 @@ import hassmpris.certs as certs  # noqa: E402
 from hassmpris import config  # noqa: E402
 
 
-__version__ = "0.0.8"
+__version__ = "0.0.9"
 
 _LOGGER = logging.getLogger(__name__)
 
