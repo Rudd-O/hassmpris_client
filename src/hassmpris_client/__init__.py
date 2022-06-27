@@ -133,6 +133,8 @@ def normalize_connection_errors(f: StubFunc) -> StubFunc:
             raise CannotConnect(e)
         except OSError as e:
             raise CannotConnect(e)
+        except grpclib.exceptions.StreamTerminatedError as e:
+            raise Disconnected(e)
         except asyncio.exceptions.TimeoutError as e:
             raise Timeout(e)
 
@@ -151,6 +153,8 @@ def normalize_connection_errors_iterable(f: StubFunc) -> StubFunc:
             raise CannotConnect(e)
         except OSError as e:
             raise CannotConnect(e)
+        except asyncio.exceptions.CancelledError as e:
+            raise Disconnected(e)
         except grpclib.exceptions.StreamTerminatedError as e:
             raise Disconnected(e)
         except asyncio.exceptions.TimeoutError as e:
