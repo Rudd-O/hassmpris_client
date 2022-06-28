@@ -39,7 +39,7 @@ import hassmpris.certs as certs  # noqa: E402
 from hassmpris import config  # noqa: E402
 
 
-__version__ = "0.0.10"
+__version__ = "0.0.11"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -273,6 +273,7 @@ class AsyncMPRISClient(object):
         client_key: RSAPrivateKey,
         trust_chain: List[Certificate],
     ) -> None:
+        self.host = host
         self.channel = MPRISChannel(
             host,
             port,
