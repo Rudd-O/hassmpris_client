@@ -39,7 +39,7 @@ import hassmpris.certs as certs  # noqa: E402
 from hassmpris import config  # noqa: E402
 
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -390,12 +390,12 @@ async def print_updates(
     # when it initially streams the players it knows about.
     async for update in mprisclient.stream_updates():
         print(update)
-        if update.WhichOneof("PlayerUpdate") == "status":
-            if update.status == mpris_pb2.PlayerStatus.GONE:
-                while update.player_id in players:
-                    players.remove(update.player_id)
-        elif update.player_id not in players:
-            players.append(update.player_id)
+        if update.HasField("player"):
+            if update.player.status == mpris_pb2.PlayerStatus.GONE:
+                while update.player.player_id in players:
+                    players.remove(update.player.player_id)
+            elif update.player.player_id not in players:
+                players.append(update.player.player_id)
 
 
 def usage() -> str:
