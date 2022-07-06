@@ -332,17 +332,32 @@ class AsyncMPRISClient(object):
         pbstatus = mpris_pb2.ChangePlayerStatusRequest.PlaybackStatus
         return await self.change_player_status(player_id, pbstatus.STOPPED)
 
+    async def previous(self, player_id: str) -> mpris_pb2.PlayerPreviousReply:
+        m = mpris_pb2.PlayerPreviousRequest(player_id=player_id)
+        return await self.stub.PlayerPrevious(m)
+
+    async def next(self, player_id: str) -> mpris_pb2.PlayerPreviousReply:
+        m = mpris_pb2.PlayerNextRequest(player_id=player_id)
+        return await self.stub.PlayerNext(m)
+
 
 async def repl(stub: AsyncMPRISClient, known_players: List[str]) -> None:
     print(
         "When you open an MPRIS-compatible player, you will see its name scroll onscreen."  # noqa: E501
     )
-    print("Commands:")
-    print("* play [optionally player name]  -- plays media on the player")
-    print("* pause [optionally player name] -- pauses media on the player")
-    print("* stop [optionally player name]  -- stops media on the player")
-    print("* empty line                     -- exits the client")
-    print()
+
+    def help() -> None:
+        print("Commands:")
+        print("* play [optionally player name]  - plays media on the player")
+        print("* pause [optionally player name] - pauses media on the player")
+        print("* stop [optionally player name]  - stops media on the player")
+        print("* prev [optionally player name]  - skip to previous track")
+        print("* next [optionally player name]  - skip to next track")
+        print("* empty line                     - shows this")
+        print("* Ctrl+D / close stdin           - exits the client")
+        print()
+
+    help()
     loop = asyncio.get_running_loop()
     fd = sys.stdin.fileno()
     while True:
@@ -351,9 +366,12 @@ async def repl(stub: AsyncMPRISClient, known_players: List[str]) -> None:
         future.add_done_callback(lambda f: loop.remove_reader(fd))
         line = await future
         line = sys.stdin.readline()
+        if not line:
+            return
         s = line.strip()
         if not s:
-            return
+            help()
+            continue
         try:
             cmd, player = s.split(" ", 1)
         except ValueError:
@@ -372,6 +390,10 @@ async def repl(stub: AsyncMPRISClient, known_players: List[str]) -> None:
                 await stub.play(player)
             elif cmd == "stop":
                 await stub.stop(player)
+            elif cmd == "prev":
+                await stub.previous(player)
+            elif cmd == "next":
+                await stub.next(player)
         except Exception as e:
             print(
                 "Cannot commandeer player %s because of error %s"
