@@ -1,7 +1,9 @@
 # Simple client to control the MPRIS multimedia agent
 
 This package contains a simple command-line utility that allows you to pair
-and then control any computer with the MPRIS Linux desktop agent.
+and then control any computer with the MPRIS Linux desktop agent.  It also
+contains an asyncio-based class that permits your Python programs to control
+media players on computers running the desktop agent.
 
 ## Setup
 

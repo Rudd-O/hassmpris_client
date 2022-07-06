@@ -1,9 +1,6 @@
-import errno
 import functools
-import logging
 import os
 import ssl
-import sys
 import tempfile
 
 import grpclib.exceptions
@@ -18,8 +15,6 @@ from cryptography.x509 import CertificateSigningRequest, Certificate
 from cryptography.hazmat.primitives.asymmetric.rsa import (
     RSAPrivateKey,
 )
-
-import shortauthstrings  # noqa: E402
 
 # FIXME: the next line should be fixed when Fedora has
 # protoc 3.19.0 or later, and the protobufs need to be recompiled
@@ -36,12 +31,8 @@ import blindecdh  # noqa: E402
 from hassmpris.proto import mpris_pb2  # noqa: E402
 import hassmpris.certs as certs  # noqa: E402
 
-from hassmpris import config  # noqa: E402
-
 
 __version__ = "0.0.13"
-
-_LOGGER = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 15.0
 
@@ -97,32 +88,14 @@ class Timeout(ClientException):
         return f % (self.args[0],)
 
 
-def accept_ecdh_via_console(
-    peer: str,
-    complete: blindecdh.CompletedECDH,
-) -> bool:
-    msg = f"""
-A notification has appeared on the remote computer {peer}.
-Please use it to verify that the key matches this computer's.
-""".strip()
-    print(msg)
-    print(
-        "The key on this side appears to be %s"
-        % shortauthstrings.emoji(
-            complete.derived_key,
-            6,
-        )
-    )
-    print("Accept?  [Y/N then ENTER]")
-    line = sys.stdin.readline()
-    result = line.lower().startswith("y")
-    return result
-
-
 StubFunc = TypeVar("StubFunc", bound=Callable[..., Any])
 
 
 def normalize_connection_errors(f: StubFunc) -> StubFunc:
+    """
+    Normalizes connection errors for easier handling.
+    """
+
     @functools.wraps(f)
     async def inner(*args: Tuple[Any]) -> Any:
         try:
@@ -142,6 +115,10 @@ def normalize_connection_errors(f: StubFunc) -> StubFunc:
 
 
 def normalize_connection_errors_iterable(f: StubFunc) -> StubFunc:
+    """
+    Normalizes connection errors in async generators for easier handling.
+    """
+
     @functools.wraps(f)
     async def inner(*args: Tuple[Any]) -> Any:
         try:
@@ -164,12 +141,32 @@ def normalize_connection_errors_iterable(f: StubFunc) -> StubFunc:
 
 
 class AsyncCAKESClient(object):
+    """
+    The CAKES client class to securely pair an MPRIS client to the
+    MPRIS desktop agent.
+
+    This is a wrapper around cakes.client.AsyncCAKESClient that brings
+    its own channel -- so you don't have to provide one.
+
+    See file cli.py in the same folder as the file containing this class
+    for a sample minimal client you can use in your own projects.
+    """
+
     def __init__(
         self,
         host: str,
         port: int,
         csr: CertificateSigningRequest,
     ):
+        """
+        Initialize the CAKES client.
+
+        Parameters:
+          host: the host name to connect to
+          port: the CAKES server port (customarily it is port 40052)
+          csr:  a CertificateSigningRequest you provide, in order for the
+                server to issue a valid certificate after successful pairing.
+        """
         self.channel = grpclib.client.Channel(host, port)
         self.client = cakes.AsyncCAKESClient(
             self.channel,
@@ -214,7 +211,14 @@ class AsyncCAKESClient(object):
 
 
 class MPRISChannel(Channel):
-    """An overridden channel to permit me to change the server hostname."""
+    """
+    A secure gRPC channel that overrides the hostname to an expected value.
+
+    All HASS MPRIS servers use hostname 'hassmpris', because they are not
+    bound to the global DNS system.  gRPC does not permit by default to
+    override the server hostname, so we must add this glue to make this
+    happen.
+    """
 
     def __init__(
         self,
@@ -263,7 +267,12 @@ class MPRISChannel(Channel):
 
 
 class AsyncMPRISClient(object):
-    """An overridden channel to permit me to change the server hostname."""
+    """
+    The MPRIS client class to govern the MPRIS desktop agent remotely.
+
+    See file cli.py in the same folder as the file containing this class
+    for a sample minimal client you can use in your own projects.
+    """
 
     def __init__(
         self,
@@ -273,6 +282,19 @@ class AsyncMPRISClient(object):
         client_key: RSAPrivateKey,
         trust_chain: List[Certificate],
     ) -> None:
+        """
+        Initialize the client.
+
+        You must already have the client_cert, client_key and trust_chain
+        values.  If you don't, you must use the AsyncCAKESClient class to
+        obtain it.
+
+        Parameters:
+          host: the host name to connect to
+          port: the port (customarily, it is port 40051)
+          client_cert, client_key, trust_chain: cryptographic material
+                associated to your MPRIS agent.
+        """
         self.host = host
         self.channel = MPRISChannel(
             host,
@@ -291,16 +313,43 @@ class AsyncMPRISClient(object):
             delattr(self, "channel")
 
     async def close(self) -> None:
+        """
+        Clean up the client.
+
+        Any concomitantly running stream_updates() will raise an exception and
+        terminate execution.
+
+        This method is called when the garbage collector disposes of the
+        client, so you want to keep a reference to the client alive if you want
+        this object to continue connected to the server.
+        """
         self.__del__()
 
     @normalize_connection_errors
     async def ping(self) -> None:
+        """
+        Ping the server, verifying cryptography is working.
+
+        A number of exceptions may be raised.  See the code for the function
+        normalize_connection_errors to discover the most common exceptions your
+        code will have to deal with.
+        """
         await self.stub.Ping(Empty(), timeout=DEFAULT_TIMEOUT)
 
     @normalize_connection_errors_iterable
     async def stream_updates(
         self,
     ) -> AsyncGenerator[mpris_pb2.MPRISUpdateReply, None]:
+        """
+        Generate a stream of MPRISUpdateReply, yielding them asynchronously
+        to the caller.
+
+        This is an async generator.
+
+        A number of exceptions may be raised.  See the code for the function
+        normalize_connection_errors_iterable to discover the most common
+        exceptions your code will have to deal with.
+        """
         async with self.stub.Updates.open() as stream:
             await stream.send_message(mpris_pb2.MPRISUpdateRequest(), end=True)
             async for message in stream:
@@ -311,8 +360,14 @@ class AsyncMPRISClient(object):
         self,
         player_id: str,
         playback_status: int,
-    ) -> None:
-        await self.stub.ChangePlayerStatus(
+    ) -> mpris_pb2.ChangePlayerStatusReply:
+        """
+        Change player status to one of the states enumerated in
+        mpris_pb2.ChangePlayerStatusRequest.PlaybackStatus.
+
+        You want to use the direct methods pause, play or stop.
+        """
+        return await self.stub.ChangePlayerStatus(
             mpris_pb2.ChangePlayerStatusRequest(
                 player_id=player_id,
                 status=playback_status,
@@ -320,215 +375,87 @@ class AsyncMPRISClient(object):
             timeout=DEFAULT_TIMEOUT,
         )
 
-    async def pause(self, player_id: str) -> None:
+    async def pause(
+        self,
+        player_id: str,
+    ) -> mpris_pb2.ChangePlayerStatusReply:
+        """
+        Tell the server to pause playback of one player.
+
+        Parameters:
+          player_id: a player ID as per one of the MPRISUpdateRequest received.
+
+        A number of exceptions may be raised.  See the code for the function
+        normalize_connection_errors to discover the most common exceptions your
+        code will have to deal with.
+        """
         pbstatus = mpris_pb2.ChangePlayerStatusRequest.PlaybackStatus
         return await self.change_player_status(player_id, pbstatus.PAUSED)
 
-    async def play(self, player_id: str) -> None:
+    async def play(
+        self,
+        player_id: str,
+    ) -> mpris_pb2.ChangePlayerStatusReply:
+        """
+        Tell the server to begin playback in one player.
+
+        Parameters:
+          player_id: a player ID as per one of the MPRISUpdateRequest received.
+
+        A number of exceptions may be raised.  See the code for the function
+        normalize_connection_errors to discover the most common exceptions your
+        code will have to deal with.
+        """
         pbstatus = mpris_pb2.ChangePlayerStatusRequest.PlaybackStatus
         return await self.change_player_status(player_id, pbstatus.PLAYING)
 
-    async def stop(self, player_id: str) -> None:
+    async def stop(
+        self,
+        player_id: str,
+    ) -> mpris_pb2.ChangePlayerStatusReply:
+        """
+        Tell the server to stop playback of one player.
+
+        Parameters:
+          player_id: a player ID as per one of the MPRISUpdateRequest received.
+
+        A number of exceptions may be raised.  See the code for the function
+        normalize_connection_errors to discover the most common exceptions your
+        code will have to deal with.
+        """
         pbstatus = mpris_pb2.ChangePlayerStatusRequest.PlaybackStatus
         return await self.change_player_status(player_id, pbstatus.STOPPED)
 
-    async def previous(self, player_id: str) -> mpris_pb2.PlayerPreviousReply:
+    async def previous(
+        self,
+        player_id: str,
+    ) -> mpris_pb2.PlayerPreviousReply:
+        """
+        Tells the server to skip one track backward in one player.
+
+        Parameters:
+          player_id: a player ID as per one of the MPRISUpdateRequest received.
+
+        A number of exceptions may be raised.  See the code for the function
+        normalize_connection_errors to discover the most common exceptions your
+        code will have to deal with.
+        """
         m = mpris_pb2.PlayerPreviousRequest(player_id=player_id)
         return await self.stub.PlayerPrevious(m)
 
-    async def next(self, player_id: str) -> mpris_pb2.PlayerPreviousReply:
+    async def next(
+        self,
+        player_id: str,
+    ) -> mpris_pb2.PlayerPreviousReply:
+        """
+        Tells the server to skip one track forward in one player.
+
+        Parameters:
+          player_id: a player ID as per one of the MPRISUpdateRequest received.
+
+        A number of exceptions may be raised.  See the code for the function
+        normalize_connection_errors to discover the most common exceptions your
+        code will have to deal with.
+        """
         m = mpris_pb2.PlayerNextRequest(player_id=player_id)
         return await self.stub.PlayerNext(m)
-
-
-async def repl(stub: AsyncMPRISClient, known_players: List[str]) -> None:
-    print(
-        "When you open an MPRIS-compatible player, you will see its name scroll onscreen."  # noqa: E501
-    )
-
-    def help() -> None:
-        print("Commands:")
-        print("* play [optionally player name]  - plays media on the player")
-        print("* pause [optionally player name] - pauses media on the player")
-        print("* stop [optionally player name]  - stops media on the player")
-        print("* prev [optionally player name]  - skip to previous track")
-        print("* next [optionally player name]  - skip to next track")
-        print("* empty line                     - shows this")
-        print("* Ctrl+D / close stdin           - exits the client")
-        print()
-
-    help()
-    loop = asyncio.get_running_loop()
-    fd = sys.stdin.fileno()
-    while True:
-        future = asyncio.Future()  # type: ignore
-        loop.add_reader(fd, future.set_result, None)
-        future.add_done_callback(lambda f: loop.remove_reader(fd))
-        line = await future
-        line = sys.stdin.readline()
-        if not line:
-            return
-        s = line.strip()
-        if not s:
-            help()
-            continue
-        try:
-            cmd, player = s.split(" ", 1)
-        except ValueError:
-            if not known_players:
-                print(
-                    "There is no last player to commandeer.",
-                    file=sys.stderr,
-                )
-                continue
-            cmd, player = s, known_players[-1]
-
-        try:
-            if cmd == "pause":
-                await stub.pause(player)
-            elif cmd == "play":
-                await stub.play(player)
-            elif cmd == "stop":
-                await stub.stop(player)
-            elif cmd == "prev":
-                await stub.previous(player)
-            elif cmd == "next":
-                await stub.next(player)
-        except Exception as e:
-            print(
-                "Cannot commandeer player %s because of error %s"
-                % (
-                    player,
-                    e,
-                ),
-                file=sys.stderr,
-            )
-
-
-async def print_updates(
-    mprisclient: AsyncMPRISClient,
-    players: List[str],
-) -> None:
-    # FIXME: the server is not sending me the status of the player
-    # when it initially streams the players it knows about.
-    async for update in mprisclient.stream_updates():
-        print(update)
-        if update.HasField("player"):
-            if update.player.status == mpris_pb2.PlayerStatus.GONE:
-                while update.player.player_id in players:
-                    players.remove(update.player.player_id)
-            elif update.player.player_id not in players:
-                players.append(update.player.player_id)
-
-
-def usage() -> str:
-    prog = sys.argv[0]
-    usage_str = f"""
-usage: {prog} <server> [ping]
-
-If ping is specified as the second parameter, then the program will simply
-attempt to ping the server and exit immediately if successful.
-
-If ping is not specified, you get a rudimentary remote control.
-""".strip()
-    return usage_str
-
-
-async def async_main() -> int:
-    if not sys.argv[1:]:
-        print(usage())
-        return os.EX_USAGE
-    server = sys.argv[1]
-    action = sys.argv[2] if sys.argv[2:] else None
-
-    try:
-        (
-            client_cert,
-            client_key,
-            trust_chain,
-        ) = certs.load_client_certs_and_trust_chain(config.folder())
-        cakes_needed = False
-    except FileNotFoundError:
-        cakes_needed = True
-
-    if cakes_needed:
-        client_csr, client_key = certs.create_and_load_client_key_and_csr(
-            config.folder()
-        )
-        cakesclient = AsyncCAKESClient(
-            server,
-            40052,
-            client_csr,
-        )
-        try:
-            ecdh = await cakesclient.obtain_verifier()
-        except Rejected as e:
-            print("Not authorized: %s" % e)
-            return errno.EACCES
-
-        result = accept_ecdh_via_console(server, ecdh)
-        if not result:
-            print("Locally rejected.")
-            return errno.EACCES
-
-        try:
-            client_cert, trust_chain = await cakesclient.obtain_certificate()
-        except Rejected as e:
-            print("Not authorized: %s" % e)
-            return errno.EACCES
-
-        certs.save_client_certs_and_trust_chain(
-            config.folder(),
-            client_cert,
-            client_key,
-            trust_chain,
-        )
-
-    mprisclient = AsyncMPRISClient(
-        server,
-        40051,
-        client_cert,
-        client_key,
-        trust_chain,
-    )
-    try:
-        if action == "ping":
-            await mprisclient.ping()
-            print("Successfully pinged the server.")
-        else:
-            players: List[str] = []
-
-            replfuture = asyncio.create_task(
-                repl(mprisclient, players),
-            )
-            updatesfuture = asyncio.create_task(
-                print_updates(mprisclient, players),
-            )
-
-            try:
-                done, pending = await asyncio.wait(
-                    [
-                        replfuture,
-                        updatesfuture,
-                    ],
-                    return_when=asyncio.FIRST_COMPLETED,
-                )
-                done.pop().result()
-            except Exception:
-                os.close(0)
-                raise
-
-    except Unauthenticated:
-        print("Server has reset its certificate store.")
-        print("Remove client files in ~/.config/hassmpris to reauthenticate.")
-        return errno.EACCES
-
-    return 0
-
-
-def main() -> None:
-    sys.exit(asyncio.run(async_main()))
-
-
-if __name__ == "__main__":
-    main()
