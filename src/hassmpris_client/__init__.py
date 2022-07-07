@@ -32,7 +32,7 @@ from hassmpris.proto import mpris_pb2  # noqa: E402
 import hassmpris.certs as certs  # noqa: E402
 
 
-__version__ = "0.0.15"
+__version__ = "0.0.16"
 
 DEFAULT_TIMEOUT = 15.0
 
