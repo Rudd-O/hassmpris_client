@@ -118,8 +118,14 @@ async def repl(stub: AsyncMPRISClient, known_players: list[str]) -> None:
                     )
                     continue
                 position, player = float(parms[0]), known_players[-1]
-            else:
+            elif len(parms) > 1:
                 position, player = float(parms[0]), parms[1]
+            else:
+                print(
+                    "You must specify a position to seek to",
+                    file=sys.stderr,
+                )
+                continue
         else:
             if len(parms) == 0:
                 if not known_players:

@@ -32,7 +32,7 @@ from hassmpris.proto import mpris_pb2  # noqa: E402
 import hassmpris.certs as certs  # noqa: E402
 
 
-__version__ = "0.0.14"
+__version__ = "0.0.15"
 
 DEFAULT_TIMEOUT = 15.0
 
@@ -459,3 +459,21 @@ class AsyncMPRISClient(object):
         """
         m = mpris_pb2.PlayerNextRequest(player_id=player_id)
         return await self.stub.PlayerNext(m)
+
+    async def seek(
+        self,
+        player_id: str,
+        position: float,
+    ) -> mpris_pb2.SeekReply:
+        """
+        Tells the server to skip one track forward in one player.
+
+        Parameters:
+          player_id: a player ID as per one of the MPRISUpdateRequest received.
+
+        A number of exceptions may be raised.  See the code for the function
+        normalize_connection_errors to discover the most common exceptions your
+        code will have to deal with.
+        """
+        m = mpris_pb2.SeekRequest(player_id=player_id, position=position)
+        return await self.stub.Seek(m)
