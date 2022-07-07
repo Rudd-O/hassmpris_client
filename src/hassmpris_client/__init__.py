@@ -429,7 +429,7 @@ class AsyncMPRISClient(object):
     async def previous(
         self,
         player_id: str,
-    ) -> mpris_pb2.PlayerPreviousReply:
+    ) -> mpris_pb2.PreviousReply:
         """
         Tells the server to skip one track backward in one player.
 
@@ -440,13 +440,13 @@ class AsyncMPRISClient(object):
         normalize_connection_errors to discover the most common exceptions your
         code will have to deal with.
         """
-        m = mpris_pb2.PlayerPreviousRequest(player_id=player_id)
-        return await self.stub.PlayerPrevious(m)
+        m = mpris_pb2.PreviousRequest(player_id=player_id)
+        return await self.stub.Previous(m)
 
     async def next(
         self,
         player_id: str,
-    ) -> mpris_pb2.PlayerPreviousReply:
+    ) -> mpris_pb2.PreviousReply:
         """
         Tells the server to skip one track forward in one player.
 
@@ -457,8 +457,8 @@ class AsyncMPRISClient(object):
         normalize_connection_errors to discover the most common exceptions your
         code will have to deal with.
         """
-        m = mpris_pb2.PlayerNextRequest(player_id=player_id)
-        return await self.stub.PlayerNext(m)
+        m = mpris_pb2.NextRequest(player_id=player_id)
+        return await self.stub.Next(m)
 
     async def seek(
         self,
