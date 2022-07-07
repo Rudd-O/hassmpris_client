@@ -1,5 +1,6 @@
 import errno
 import os
+import shlex
 import sys
 
 import asyncio
@@ -56,14 +57,38 @@ async def repl(stub: AsyncMPRISClient, known_players: list[str]) -> None:
 
     def help() -> None:
         print("Commands:")
-        print("* play [optionally player name]  - plays media on the player")
-        print("* pause [optionally player name] - pauses media on the player")
-        print("* stop [optionally player name]  - stops media on the player")
-        print("* prev [optionally player name]  - skip to previous track")
-        print("* next [optionally player name]  - skip to next track")
-        print("* empty line                     - shows this")
-        print("* Ctrl+D / close stdin           - exits the client")
-        print()
+        print(
+            "* play [optionally player name]      \n"
+            "  plays media on the player            "
+        )
+        print(
+            "* pause [optionally player name]     \n"
+            "  pauses media on the player           "
+        )
+        print(
+            "* stop [optionally player name]      \n"
+            "  stops media on the player            "
+        )
+        print(
+            "* prev [optionally player name]      \n"
+            "  skip to previous track               "
+        )
+        print(
+            "* next [optionally player name]      \n"
+            "  skip to next track                   "
+        )
+        print(
+            "* seek <pos> [optionally player name]\n"
+            "  seek player to pos (in seconds)      "
+        )
+        print(
+            "* empty line                         \n"
+            "  shows this help message              "
+        )
+        print(
+            "* Ctrl+D / close stdin               \n"
+            "  exits this client application        "
+        )
 
     help()
     loop = asyncio.get_running_loop()
@@ -80,16 +105,32 @@ async def repl(stub: AsyncMPRISClient, known_players: list[str]) -> None:
         if not s:
             help()
             continue
-        try:
-            cmd, player = s.split(" ", 1)
-        except ValueError:
-            if not known_players:
-                print(
-                    "There is no last player to commandeer.",
-                    file=sys.stderr,
-                )
-                continue
-            cmd, player = s, known_players[-1]
+
+        tokens = shlex.split(s)
+        cmd, parms = tokens[0], tokens[1:]
+
+        if cmd == "seek":
+            if len(parms) == 1:
+                if not known_players:
+                    print(
+                        "There is no last player to commandeer.",
+                        file=sys.stderr,
+                    )
+                    continue
+                position, player = float(parms[0]), known_players[-1]
+            else:
+                position, player = float(parms[0]), parms[1]
+        else:
+            if len(parms) == 0:
+                if not known_players:
+                    print(
+                        "There is no last player to commandeer.",
+                        file=sys.stderr,
+                    )
+                    continue
+                player = known_players[-1]
+            else:
+                player = parms[0]
 
         try:
             if cmd == "pause":
@@ -102,6 +143,8 @@ async def repl(stub: AsyncMPRISClient, known_players: list[str]) -> None:
                 await stub.previous(player)
             elif cmd == "next":
                 await stub.next(player)
+            elif cmd == "seek":
+                await stub.seek(player, position)
         except Exception as e:
             print(
                 "Cannot commandeer player %s because of error %s"
