@@ -16,3 +16,12 @@ on the computer you want to control remotely.
 
 Install this package on the computer you want to control other machines from.
 You'll find the program `hassmpris-client` installed here.
+
+## Troubleshooting and help
+
+Look at your system logs (e.g. if running this under Home Assistant, look at the
+Home Assistant logs).  You should make a copy of any traceback of interest.
+
+### Found a bug or a traceback?
+
+Please report it in the [project's issue tracker](https://github.com/Rudd-O/hassmpris_client/issues).
