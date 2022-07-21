@@ -117,12 +117,12 @@ async def repl(stub: AsyncMPRISClient, known_players: list[str]) -> None:
                         file=sys.stderr,
                     )
                     continue
-                position, player = float(parms[0]), known_players[-1]
+                offset, player = float(parms[0]), known_players[-1]
             elif len(parms) > 1:
-                position, player = float(parms[0]), parms[1]
+                offset, player = float(parms[0]), parms[1]
             else:
                 print(
-                    "You must specify a position to seek to",
+                    "You must specify an offset to seek to",
                     file=sys.stderr,
                 )
                 continue
@@ -150,7 +150,7 @@ async def repl(stub: AsyncMPRISClient, known_players: list[str]) -> None:
             elif cmd == "next":
                 await stub.next(player)
             elif cmd == "seek":
-                await stub.seek(player, position)
+                await stub.seek(player, offset)
         except Exception as e:
             print(
                 "Cannot commandeer player %s because of error %s"

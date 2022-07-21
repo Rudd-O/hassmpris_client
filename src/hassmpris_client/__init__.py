@@ -463,17 +463,48 @@ class AsyncMPRISClient(object):
     async def seek(
         self,
         player_id: str,
-        position: float,
+        offset: float,
     ) -> mpris_pb2.SeekReply:
         """
-        Tells the server to skip one track forward in one player.
+        Tells the server to seek within the current-playing track of a player.
 
         Parameters:
           player_id: a player ID as per one of the MPRISUpdateRequest received.
+          offset: a positive or negative float indicating how many seconds to
+            go forward or backward.
 
         A number of exceptions may be raised.  See the code for the function
         normalize_connection_errors to discover the most common exceptions your
         code will have to deal with.
         """
-        m = mpris_pb2.SeekRequest(player_id=player_id, position=position)
+        m = mpris_pb2.SeekRequest(player_id=player_id, offset=offset)
         return await self.stub.Seek(m)
+
+    async def set_position(
+        self,
+        player_id: str,
+        track_id: str,
+        position: float,
+    ) -> mpris_pb2.SetPositionReply:
+        """
+        Tells the server to play the track ID from the currently playing track.
+
+        Parameters:
+          player_id: a player ID as per one of the MPRISUpdateRequest received.
+          track_id: the string ID "mpris:trackid" sent by the player in the
+            metadata update payload.  If this does not match the current track,
+            the set position command will be ignored as stale.
+          position: an absolute zero or positive float indicating how many
+            seconds to go into the track from its beginning.
+
+        See https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#methods
+        for more information.
+
+        A number of exceptions may be raised.  See the code for the function
+        normalize_connection_errors to discover the most common exceptions your
+        code will have to deal with.
+        """
+        m = mpris_pb2.SetPositionRequest(
+            player_id=player_id, track_id=track_id, position=position
+        )
+        return await self.stub.SetPosition(m)
