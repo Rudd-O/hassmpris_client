@@ -1,9 +1,12 @@
 # Simple client to control the MPRIS multimedia agent
 
 This package contains a simple command-line utility that allows you to pair
-and then control any computer with the MPRIS Linux desktop agent.  It also
-contains an asyncio-based class that permits your Python programs to control
-media players on computers running the desktop agent.
+and then control any computer with the MPRIS Linux desktop agent.
+
+It also contains an asyncio-based client class that permits your Python
+programs to control media players on computers running the desktop agent.
+This class is used in Home Assistant to provide access to media players via
+the Home Assistant user interface.
 
 ## Setup
 
