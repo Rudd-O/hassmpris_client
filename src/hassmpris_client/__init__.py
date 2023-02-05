@@ -32,8 +32,8 @@ from hassmpris.proto import mpris_pb2  # noqa: E402
 import hassmpris.certs as certs  # noqa: E402
 
 
-__version__ = "0.0.19"
-__SPEC_URL = (
+__version__ = "0.0.20"
+_SPEC_URL = (
     "https://specifications.freedesktop.org/"
     "mpris-spec/2.2/Player_Interface.html#methods"
 )
@@ -501,7 +501,7 @@ class AsyncMPRISClient(object):
           position: an absolute zero or positive float indicating how many
             seconds to go into the track from its beginning.
 
-        See {__SPEC_URL}
+        See {_SPEC_URL}
         for more information.
 
         A number of exceptions may be raised.  See the code for the function
