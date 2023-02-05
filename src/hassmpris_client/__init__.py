@@ -32,7 +32,11 @@ from hassmpris.proto import mpris_pb2  # noqa: E402
 import hassmpris.certs as certs  # noqa: E402
 
 
-__version__ = "0.0.18"
+__version__ = "0.0.19"
+__SPEC_URL = (
+    "https://specifications.freedesktop.org/"
+    "mpris-spec/2.2/Player_Interface.html#methods"
+)
 
 DEFAULT_TIMEOUT = 15.0
 
@@ -263,7 +267,7 @@ class MPRISChannel(Channel):
             ssl=self._ssl,
             server_hostname="hassmpris",
         )
-        return cast(H2Protocol, protocol)
+        return protocol
 
 
 class AsyncMPRISClient(object):
@@ -486,7 +490,7 @@ class AsyncMPRISClient(object):
         track_id: str,
         position: float,
     ) -> mpris_pb2.SetPositionReply:
-        """
+        f"""
         Tells the server to play the track ID from the currently playing track.
 
         Parameters:
@@ -497,7 +501,7 @@ class AsyncMPRISClient(object):
           position: an absolute zero or positive float indicating how many
             seconds to go into the track from its beginning.
 
-        See https://specifications.freedesktop.org/mpris-spec/2.2/Player_Interface.html#methods
+        See {__SPEC_URL}
         for more information.
 
         A number of exceptions may be raised.  See the code for the function
