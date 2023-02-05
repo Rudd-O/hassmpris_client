@@ -153,9 +153,10 @@ async def repl(stub: AsyncMPRISClient, known_players: list[str]) -> None:
                 await stub.seek(player, offset)
         except Exception as e:
             print(
-                "Cannot commandeer player %s because of error %s"
+                "Cannot commandeer player %s because of %s %s"
                 % (
                     player,
+                    type(e),
                     e,
                 ),
                 file=sys.stderr,
