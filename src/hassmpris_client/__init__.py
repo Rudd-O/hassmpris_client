@@ -32,7 +32,7 @@ from hassmpris.proto import mpris_pb2  # noqa: E402
 import hassmpris.certs as certs  # noqa: E402
 
 
-__version__ = "0.0.20"
+__version__ = "0.0.21"
 _SPEC_URL = (
     "https://specifications.freedesktop.org/"
     "mpris-spec/2.2/Player_Interface.html#methods"
