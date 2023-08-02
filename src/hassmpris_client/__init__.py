@@ -32,7 +32,7 @@ from hassmpris.proto import mpris_pb2  # noqa: E402
 import hassmpris.certs as certs  # noqa: E402
 
 
-__version__ = "0.0.21"
+__version__ = "0.0.22"
 _SPEC_URL = (
     "https://specifications.freedesktop.org/"
     "mpris-spec/2.2/Player_Interface.html#methods"
@@ -58,8 +58,8 @@ class CannotConnect(ClientException):
     """
 
     def __str__(self) -> str:
-        f = "Server is not running or refuses connections: %s"
-        return f % (self.args[0],)
+        f = "Server is not running or refuses connections: %s (%s)"
+        return f % (self.args[0], type(self.args[0]))
 
 
 class Unauthenticated(ClientException):
@@ -68,8 +68,8 @@ class Unauthenticated(ClientException):
     """
 
     def __str__(self) -> str:
-        f = "Client is not authenticated: %s"
-        return f % (self.args[0],)
+        f = "Client is not authenticated: %s (%s)"
+        return f % (self.args[0], type(self.args[0]))
 
 
 class Disconnected(ClientException):
@@ -78,8 +78,8 @@ class Disconnected(ClientException):
     """
 
     def __str__(self) -> str:
-        f = "Server gone: %s"
-        return f % (self.args[0],)
+        f = "Server gone: %s (%s)"
+        return f % (self.args[0], type(self.args[0]))
 
 
 class Timeout(ClientException):
@@ -88,8 +88,8 @@ class Timeout(ClientException):
     """
 
     def __str__(self) -> str:
-        f = "Server timed out: %s"
-        return f % (self.args[0],)
+        f = "Server timed out: %s (%s)"
+        return f % (self.args[0], type(self.args[0]))
 
 
 StubFunc = TypeVar("StubFunc", bound=Callable[..., Any])
@@ -124,22 +124,22 @@ def normalize_connection_errors_iterable(f: StubFunc) -> StubFunc:
     """
 
     @functools.wraps(f)
-    async def inner(*args: Tuple[Any]) -> Any:
+    async def inner(*args: Tuple[Any], **kwargs: Any) -> Any:
         try:
-            async for x in f(*args):
+            async for x in f(*args, **kwargs):
                 yield x
         except ssl.SSLCertVerificationError as e:
-            raise Unauthenticated(e)
-        except ConnectionRefusedError as e:
-            raise CannotConnect(e)
-        except OSError as e:
-            raise CannotConnect(e)
-        except asyncio.exceptions.CancelledError as e:
-            raise Disconnected(e)
-        except grpclib.exceptions.StreamTerminatedError as e:
-            raise Disconnected(e)
+            raise Unauthenticated(e) from e
         except asyncio.exceptions.TimeoutError as e:
-            raise Timeout(e)
+            raise Timeout(e) from e
+        except ConnectionRefusedError as e:
+            raise CannotConnect(e) from e
+        except OSError as e:
+            raise CannotConnect(e) from e
+        except asyncio.exceptions.CancelledError as e:
+            raise Disconnected(e) from e
+        except grpclib.exceptions.StreamTerminatedError as e:
+            raise Disconnected(e) from e
 
     return cast(StubFunc, inner)
 
@@ -343,6 +343,7 @@ class AsyncMPRISClient(object):
     @normalize_connection_errors_iterable
     async def stream_updates(
         self,
+        timeout: int | None = None,
     ) -> AsyncGenerator[mpris_pb2.MPRISUpdateReply, None]:
         """
         Generate a stream of MPRISUpdateReply, yielding them asynchronously
@@ -353,11 +354,29 @@ class AsyncMPRISClient(object):
         A number of exceptions may be raised.  See the code for the function
         normalize_connection_errors_iterable to discover the most common
         exceptions your code will have to deal with.
+
+        If a non-None timeout is specified, then the call will timeout
+        if no messages from the server have been received after the
+        timeout (in seconds) has elapsed.  It is recommended to specify
+        a timeout, keeping in mind that the standard heartbeat timeout
+        sent by the MPRIS agent is 10 seconds (see variable
+        HEARTBEAT_FREQUENCY in the hassmpris_agent package).  With this
+        timeout, a client can detect if the server has gone AWOL.
+        Otherwise, this call may hang forever (but the caller could
+        conceivably timeout it using asyncio.timeout).
         """
         async with self.stub.Updates.open() as stream:
             await stream.send_message(mpris_pb2.MPRISUpdateRequest(), end=True)
-            async for message in stream:
-                yield message
+            while True:
+                if timeout is not None:
+                    async with asyncio.timeout(timeout):
+                        message = await stream.recv_message()
+                else:
+                    message = await stream.recv_message()
+                if message is None:
+                    break
+                else:
+                    yield message
 
     @normalize_connection_errors
     async def change_player_status(
