@@ -32,7 +32,7 @@ from hassmpris.proto import mpris_pb2  # noqa: E402
 import hassmpris.certs as certs  # noqa: E402
 
 
-__version__ = "0.0.22"
+__version__ = "0.0.23"
 _SPEC_URL = (
     "https://specifications.freedesktop.org/"
     "mpris-spec/2.2/Player_Interface.html#methods"
@@ -506,9 +506,9 @@ class AsyncMPRISClient(object):
     async def set_position(
         self,
         player_id: str,
-        track_id: str,
+        track_id: str | None,
         position: float,
-    ) -> mpris_pb2.SetPositionReply:
+    ) -> mpris_pb2.SetPositionReply | mpris_pb2.SeekAbsoluteReply:
         f"""
         Tells the server to play the track ID from the currently playing track.
 
@@ -516,18 +516,23 @@ class AsyncMPRISClient(object):
           player_id: a player ID as per one of the MPRISUpdateRequest received.
           track_id: the string ID "mpris:trackid" sent by the player in the
             metadata update payload.  If this does not match the current track,
-            the set position command will be ignored as stale.
+            the set position command will be ignored as stale.  If this is None,
+            then the current track is assumed, by using SeekAbsoluteRequest
+            instead of SetPosition.
           position: an absolute zero or positive float indicating how many
             seconds to go into the track from its beginning.
 
-        See {_SPEC_URL}
-        for more information.
+        See {_SPEC_URL} for more information.
 
         A number of exceptions may be raised.  See the code for the function
         normalize_connection_errors to discover the most common exceptions your
         code will have to deal with.
         """
-        m = mpris_pb2.SetPositionRequest(
-            player_id=player_id, track_id=track_id, position=position
-        )
-        return await self.stub.SetPosition(m)
+        if track_id is not None:
+            m = mpris_pb2.SetPositionRequest(
+                player_id=player_id, track_id=track_id, position=position
+            )
+            return await self.stub.SetPosition(m)
+        else:
+            m = mpris_pb2.SeekAbsoluteRequest(player_id=player_id, position=position)
+            return await self.stub.SeekAbsolute(m)
